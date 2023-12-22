@@ -1,26 +1,32 @@
 import tkinter as tk
-from tkinter import ttk
+from tkinter import ttk, messagebox
 import networkx as nx
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
 
 class NetworkGraph:
-    def __init__(self, num_nodes):
-        self.num_nodes = num_nodes
+    def __init__(self):
+        self.unique_vertices = set()
+        self.num_nodes = 0
         self.edges = []
 
     def add_edge(self, src, dest, speed, busyness):
+        self.unique_vertices.add(src)
+        self.unique_vertices.add(dest)
+        self.num_nodes = len(self.unique_vertices)
+
         self.edges.append(
             (src, dest, speed / busyness if (busyness > 1) else speed))
         self.edges.append(
             (dest, src, speed / busyness if (busyness > 1) else speed))
 
     def calculate_shortest_path_bellman_ford(self, source, destination):
-        num_nodes = self.num_nodes
-        weight = [float('inf')] * num_nodes
-        weight[source] = 0
-        parent = [-1] * num_nodes
+        nodes = list(self.unique_vertices)
+        num_nodes = len(nodes)
+        weight = {node: float('inf') for node in nodes}
+        weight[nodes[source]] = 0
+        parent = {node: None for node in nodes}
 
         # Bellman-Ford algorithm
         for _ in range(num_nodes - 1):
@@ -35,9 +41,11 @@ class NetworkGraph:
                 raise ValueError("Graph contains a negative weight cycle")
 
         shortest_path = []
-        while destination != -1:
-            shortest_path.append(destination)
-            destination = parent[destination]
+        current_vertex = nodes[destination]
+        while current_vertex is not None:
+            shortest_path.append(current_vertex)
+            current_vertex = parent[current_vertex]
+
         shortest_path.reverse()
 
         return shortest_path
@@ -67,8 +75,7 @@ class NetworkGraphUI:
         self.master = master
         self.master.title("Network Graph UI")
 
-        self.num_nodes = 6
-        self.graph = NetworkGraph(self.num_nodes)
+        self.graph = NetworkGraph()
         self.graph.add_edge(0, 1, 5, 1.2)
         self.graph.add_edge(0, 2, 3, 0.5)
         self.graph.add_edge(1, 3, 6, 1.5)
@@ -87,7 +94,7 @@ class NetworkGraphUI:
         self.from_label.grid(row=1, column=0, padx=10)
 
         self.from_entry = ttk.Combobox(
-            self.master, values=list(range(self.num_nodes)))
+            self.master, values=list(range(self.graph.num_nodes)))
         self.from_entry.grid(row=1, column=1, padx=10)
         self.from_entry.set(0)
 
@@ -95,9 +102,9 @@ class NetworkGraphUI:
         self.to_label.grid(row=1, column=2, padx=10)
 
         self.to_entry = ttk.Combobox(
-            self.master, values=list(range(self.num_nodes)))
+            self.master, values=list(range(self.graph.num_nodes)))
         self.to_entry.grid(row=1, column=3, padx=10)
-        self.to_entry.set(self.num_nodes - 1)
+        self.to_entry.set(self.graph.num_nodes - 1)
 
         self.calculate_button = tk.Button(
             self.master, text="Calculate Shortest Path", command=self.calculate_shortest_path)
@@ -106,7 +113,60 @@ class NetworkGraphUI:
         self.result_label = tk.Label(self.master, text="")
         self.result_label.grid(row=3, column=0, columnspan=4)
 
+        self.edge_entry_label = tk.Label(
+            self.master, text="Enter Edge (src, dest, speed, busyness):")
+        self.edge_entry_label.grid(
+            row=6, column=0, columnspan=2, pady=5, padx=10)
+
+        self.edge_entry = ttk.Entry(self.master)
+        self.edge_entry.grid(row=6, column=2, padx=10)
+
+        self.add_edge_button = tk.Button(
+            self.master, text="Add Edge", command=self.add_edge)
+        self.add_edge_button.grid(row=6, column=3, padx=10)
+
+        self.default_graph_button = tk.Button(
+            self.master, text="Load Default Graph", command=self.load_default_graph)
+        self.default_graph_button.grid(
+            row=7, column=0, columnspan=2, pady=5, padx=10)
+
+        self.clear_graph_button = tk.Button(
+            self.master, text="Clear Graph", command=self.clear_graph)
+        self.clear_graph_button.grid(
+            row=7, column=2, columnspan=2, pady=5, padx=10)
+
+    def add_edge(self):
+        try:
+            edge_values = list(map(float, self.edge_entry.get().split(',')))
+            if len(edge_values) != 4:
+                raise ValueError(
+                    "Invalid edge format. Please enter (src, dest, speed, busyness).")
+
+            src, dest, speed, busyness = edge_values
+            self.graph.add_edge(int(src), int(dest), speed, busyness)
+
+            self.edge_entry.delete(0, tk.END)  # Clear the entry
+            self.create_graph_visualization()
+
+        except ValueError as e:
+            messagebox.showerror("Error", f"Invalid input: {e}")
+
+    def load_default_graph(self):
+        self.graph = NetworkGraph()
+        # Add default edges
+        default_edges = [(0, 1, 5, 1.2), (0, 2, 3, 0.5), (1, 3, 6, 1.5),
+                         (2, 1, 1, 0.7), (2, 4, 2, 1), (3, 5, 1, 1), (4, 5, 3, 1.1)]
+        for edge in default_edges:
+            self.graph.add_edge(*edge)
+
+        self.create_graph_visualization()
+
+    def clear_graph(self):
+        self.graph = NetworkGraph()
+        self.create_graph_visualization()
+
     def create_graph_visualization(self):
+        self.update_combobox_values()
         self.graph_visualization_frame = ttk.Frame(self.master)
         self.graph_visualization_frame.grid(
             row=4, column=0, columnspan=4, pady=10)
@@ -120,14 +180,20 @@ class NetworkGraphUI:
 
     def draw_graph(self):
         G = nx.DiGraph()
-        for edge in self.graph.edges:
-            src, dest, _ = edge
-            G.add_edge(src, dest)
+        edge_labels = {}  # New dictionary for edge labels
 
-        # You can choose a different layout if needed
+        for edge in self.graph.edges:
+            src, dest, weight = edge
+            G.add_edge(src, dest, weight=weight)
+            edge_labels[(src, dest)] = f"{weight:.2f}"
+
         pos = nx.spring_layout(G)
         nx.draw(G, pos, with_labels=True, ax=self.graph_ax, node_size=700, node_color="skyblue",
                 font_size=8, font_color="black", font_weight="bold", arrowsize=10)
+
+        # Draw edge labels
+        nx.draw_networkx_edge_labels(
+            G, pos, edge_labels=edge_labels, ax=self.graph_ax, font_color="red")
 
     def calculate_shortest_path(self):
         source = int(self.from_entry.get())
@@ -144,8 +210,11 @@ class NetworkGraphUI:
             result_str = f"Error: {e}"
 
         self.result_label.config(text=result_str)
-        self.draw_graph()
-        self.graph_canvas.draw()
+
+    def update_combobox_values(self):
+        nodes = list(self.graph.unique_vertices)
+        self.from_entry['values'] = nodes
+        self.to_entry['values'] = nodes
 
 
 if __name__ == "__main__":
