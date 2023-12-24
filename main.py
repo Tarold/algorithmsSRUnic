@@ -3,6 +3,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 import subprocess
 from PIL import Image, ImageTk
+from threading import Thread
 
 
 class MainApplication(tk.Tk):
@@ -35,6 +36,10 @@ class MainApplication(tk.Tk):
         self.config(menu=menu_bar)
 
     def run_task(self, lab_number, task_number):
+        thread = Thread(target=self._run_task, args=(lab_number, task_number))
+        thread.start()
+
+    def _run_task(self, lab_number, task_number):
         script_path = f"{lab_number}.{task_number}.py"
 
         if not os.path.exists(script_path):
@@ -44,6 +49,10 @@ class MainApplication(tk.Tk):
         subprocess.run(["python3", script_path])
 
     def show_image(self, image_path):
+        thread = Thread(target=self._show_image, args=(image_path,))
+        thread.start()
+
+    def _show_image(self, image_path):
         image = Image.open(image_path)
 
         image_window = tk.Toplevel(self)
