@@ -69,6 +69,45 @@ class NetworkGraph:
 
         return dist
 
+    def calculate_all_shortest_paths_floyd_warshall(self):
+        num_nodes = self.num_nodes
+        dist = [[float('inf')] * num_nodes for _ in range(num_nodes)]
+        pred = [[None] * num_nodes for _ in range(num_nodes)]
+
+        # Initialize distances with edge weights and predecessors
+        for src, dest, cost in self.edges:
+            dist[src][dest] = cost
+            pred[src][dest] = src
+
+        for i in range(num_nodes):
+            dist[i][i] = 0
+            pred[i][i] = None
+
+        # Update distances and predecessors using Floyd-Warshall algorithm
+        for k in range(num_nodes):
+            for i in range(num_nodes):
+                for j in range(num_nodes):
+                    if dist[i][k] + dist[k][j] < dist[i][j]:
+                        dist[i][j] = dist[i][k] + dist[k][j]
+                        pred[i][j] = pred[k][j]
+
+        # Extract all shortest paths
+        all_shortest_paths = [[[]
+                               for _ in range(num_nodes)] for _ in range(num_nodes)]
+        for i in range(num_nodes):
+            for j in range(num_nodes):
+                path = self.construct_shortest_path(i, j, pred)
+                all_shortest_paths[i][j] = path
+
+        return dist, all_shortest_paths
+
+    def construct_shortest_path(self, i, j, pred):
+        path = []
+        while j is not None:
+            path.insert(0, j)
+            j = pred[i][j]
+        return path
+
 
 class NetworkGraphUI:
     def __init__(self, master):
@@ -83,6 +122,7 @@ class NetworkGraphUI:
         self.graph.add_edge(2, 4, 2, 1)
         self.graph.add_edge(3, 5, 1, 1)
         self.graph.add_edge(4, 5, 3, 1.1)
+
         self.create_widgets()
         self.create_graph_visualization()
 
@@ -134,6 +174,28 @@ class NetworkGraphUI:
             self.master, text="Clear Graph", command=self.clear_graph)
         self.clear_graph_button.grid(
             row=7, column=2, columnspan=2, pady=5, padx=10)
+
+        self.show_all_paths_button = tk.Button(
+            self.master, text="Show All Shortest Paths", command=self.show_all_shortest_paths)
+        self.show_all_paths_button.grid(
+            row=8, column=0, columnspan=4, pady=10)
+
+    def show_all_shortest_paths(self):
+        try:
+            all_dist, all_shortest_paths = self.graph.calculate_all_shortest_paths_floyd_warshall()
+
+            if not all_shortest_paths:
+                result_str = "No shortest paths found."
+            else:
+                result_str = "All Shortest Paths:\n"
+                for i in range(0, len(all_shortest_paths)):
+                    for j in range(0, len(all_shortest_paths[0])):
+                        result_str += f"From {i} to {j}: {all_shortest_paths[i][j]}, Distance: {all_dist[i][j]}\n"
+
+            messagebox.showinfo("All Shortest Paths", result_str)
+
+        except ValueError as e:
+            messagebox.showerror("Error", f"Error: {e}")
 
     def add_edge(self):
         try:
@@ -202,7 +264,8 @@ class NetworkGraphUI:
         try:
             shortest_path = self.graph.calculate_shortest_path_bellman_ford(
                 source, destination)
-            distance = self.graph.calculate_all_shortest_paths_floyd_warshall()[
+            distanceMatrix = self.graph.calculate_all_shortest_paths_floyd_warshall()
+            distance = distanceMatrix[
                 source][destination]
 
             result_str = f"Shortest Path: {shortest_path}\nDistance: {distance}"
